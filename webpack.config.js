@@ -4,8 +4,8 @@ const webpack = require("webpack");
 module.exports = {
 	mode: "development", // o 'production' para el entorno de producción
 	entry: {
-		"dist/main.js": "./src/index.js",
-		"public/main.js": "./src/index.js",
+		"dist/main": "./src/index.js",
+		"public/main": "./src/index.js",
 	},
 	output: {
 		path: path.resolve(__dirname, "./"), // Ruta absoluta a la carpeta de salida
