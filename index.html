@@ -71,6 +71,19 @@
 					);
 
 					console.log("Transacción enviada:", signature);
+					// Confirmar la transacción
+					const confirmation = await connection.confirmTransaction(signature);
+
+					if (confirmation.value.err) {
+						console.error(
+							"Error confirmando la transacción:",
+							confirmation.value.err
+						);
+						// Manejar el error, la transacción no se confirmó.
+					} else {
+						console.log("Transacción confirmada:", confirmation);
+						// La transacción se confirmó correctamente.
+					}
 				} catch (error) {
 					console.error("Error enviando la transacción:", error);
 				}
