@@ -4,16 +4,27 @@
 	"main": "main.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "webpack serve"
+		"start": "npx webpack && live-server"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"description": "",
 	"devDependencies": {
+		"@babel/core": "^7.26.9",
+		"@babel/preset-env": "^7.26.9",
+		"babel-loader": "^9.2.1",
 		"buffer": "^6.0.3",
 		"webpack": "^5.98.0",
 		"webpack-cli": "^6.0.1",
 		"webpack-dev-server": "^5.2.0"
+	},
+	"dependencies": {
+		"@solana/wallet-adapter-base": "^0.9.23",
+		"@solana/wallet-standard-wallet-adapter-base": "^1.1.4",
+		"@solana/web3.js": "^1.98.0",
+		"@wallet-standard/core": "^1.1.0",
+		"bs58": "^6.0.0",
+		"solana-connect": "^0.1.10"
 	}
 }

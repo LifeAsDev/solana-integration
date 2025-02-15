@@ -1,50 +1,38 @@
 const path = require("path");
-const webpack = require("webpack");
+const { ProvidePlugin } = require("webpack"); // Usa require
 
 module.exports = {
-	mode: "development", // o 'production' para el entorno de producción
-	entry: {
-		"dist/main": "./src/index.js",
-		"public/main": "./src/index.js",
-	},
+	// Usa module.exports
+	mode: "production",
+	entry: "./src/index.js",
 	output: {
-		path: path.resolve(__dirname, "./"), // Ruta absoluta a la carpeta de salida
-		filename: "[name].js", // Nombre del archivo de salida
-		publicPath: "/", // Ruta pública para el navegador (importante para dev-server)
-	},
-
-	devServer: {
-		static: {
-			directory: path.join(__dirname, "public"), // Ruta a la carpeta de archivos estáticos (index.html)
-			publicPath: "/", // La ruta pública para acceder a los archivos estáticos
+		path: path.resolve(__dirname, "public"),
+		filename: "mainModule.js",
+		library: {
+			type: "module",
 		},
-		port: 8080,
-		hot: true, // Habilita la recarga en caliente (opcional, pero recomendado)
 	},
+	experiments: {
+		outputModule: true,
+	},
+	target: "web",
 	module: {
-		// Para procesar diferentes tipos de archivos (CSS, imágenes, etc.)
 		rules: [
-			// Ejemplo para procesar archivos CSS (si los tienes)
 			{
-				test: /\.css$/i,
-				use: ["style-loader", "css-loader"],
+				test: /\.js$/, // Archivos JS
+				exclude: /node_modules/, // Excluye node_modules
+				use: {
+					loader: "babel-loader", // Usa babel-loader
+				},
 			},
-			// Ejemplo para procesar imágenes (si las tienes)
-			{
-				test: /\.(png|svg|jpg|jpeg|gif)$/i,
-				type: "asset/resource",
-			},
-			//... otras reglas para otros tipos de archivos
 		],
 	},
+	resolve: {
+		extensions: [".js", ".mjs"],
+	},
 	plugins: [
-		new webpack.ProvidePlugin({
+		new ProvidePlugin({
 			Buffer: ["buffer", "Buffer"],
 		}),
 	],
-	resolve: {
-		fallback: {
-			buffer: require.resolve("buffer"),
-		},
-	},
 };

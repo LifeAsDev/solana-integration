@@ -4,20 +4,15 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Solana Pay Demo</title>
-
-		<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.75.0/lib/index.iife.min.js"></script>
-
-		<script src="https://www.unpkg.com/solana-connect"></script>
 	</head>
 	<body>
-		<script src="./main.js"></script>
-
+		<script type="module" src="./module.js"></script>
 		<h1>Solana Pay Demo</h1>
-		<button onclick="connectWallet()">Conectar Wallet</button>
+		<button onclick="SolanaService.connectWallet()">Conectar Wallet</button>
 		<button onclick="check()">Check Wallet</button>
 
 		<p id="wallet-address">No conectado</p>
 		<button onclick="sendPayment()">Pagar 0.1 SOL</button>
-		<button onclick="set()">set</button>
+		<button onclick="SolanaService.set()">set</button>
 	</body>
 </html>

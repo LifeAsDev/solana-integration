@@ -1,4 +1,4 @@
-# Solana and Solana-Connect 
+# Solana and Solana-Connect
 
 Integration of Solana and Solana-Connect with js/html vanilla
 
@@ -9,7 +9,9 @@ The purporse of this project is enable Solana and Solana-Connect on Construct 3
 ## Installation
 
 run this commands to start developing
+
 ```bash
 npm install
-npx webpack 
+npx webpack
 npm start
+```
