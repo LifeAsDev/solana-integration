@@ -8,11 +8,10 @@
 	<body>
 		<script type="module" src="./module.js"></script>
 		<h1>Solana Pay Demo</h1>
-		<button onclick="SolanaService.connectWallet()">Conectar Wallet</button>
-		<button onclick="check()">Check Wallet</button>
+		<button id="connect">Conectar Wallet</button>
+		<button id="check">Check Wallet</button>
 
 		<p id="wallet-address">No conectado</p>
-		<button onclick="sendPayment()">Pagar 0.1 SOL</button>
-		<button onclick="SolanaService.set()">set</button>
+		<button id="pagar">Pagar 0.1 SOL</button>
 	</body>
 </html>

@@ -26,8 +26,11 @@ class SolanaWalletService {
 				console.log("Adding wallet", newWallet.name);
 				const walletAdapter = new StandardWalletAdapter({ wallet: newWallet });
 				this.wallets.set(newWallet.name, walletAdapter);
+				const event = new Event("newWalletAvailable");
+				document.dispatchEvent(event);
+
 				if (this.activeWallet === newWallet.name) {
-					this.connectWallet(this.activeWallet);
+					this.connectWallet(newWallet.name, true);
 				}
 			}
 		};
@@ -48,20 +51,25 @@ class SolanaWalletService {
 			await wallet.connect();
 
 			if (!wallet.connected || !wallet.publicKey) {
+				localStorage.removeItem("activeWallet");
 				throw new Error(`Wallet not connected: ${walletName}`);
 			}
 			wallet.on("disconnect", () => {
 				wallet.removeListener("disconnect");
 				console.log("Disconnected", wallet.name);
 				this.activeWallet = null;
+				localStorage.removeItem("activeWallet");
 			});
-
 			this.activeWallet = walletName;
+			const event = new Event("onWalletConnected");
+			document.dispatchEvent(event);
 			if (!skipStorage) {
 				localStorage.setItem("activeWallet", walletName);
 			}
 			return wallet;
 		} catch (error) {
+			localStorage.removeItem("activeWallet");
+
 			console.error("Error connecting wallet:", error);
 			throw error;
 		}
@@ -85,63 +93,99 @@ class SolanaWalletService {
 
 	getConnectedWallet() {
 		if (this.activeWallet) {
-			return this.wallets.get(this.activeWallet) || null;
+			if (
+				this.wallets.get(this.activeWallet) &&
+				this.wallets.get(this.activeWallet).connected
+			)
+				return this.wallets.get(this.activeWallet) || null;
 		}
 		return null;
 	}
+
 	getWallets() {
 		if (this.wallets.size > 0) {
 			return Array.from(this.wallets.keys());
 		}
 		return [];
 	}
+
 	async sendTransaction(
-		wallet = this.wallets(this.activeWallet),
-		recipient = this.wallets(this.activeWallet),
+		wallet = this.wallets.get(this.activeWallet),
+		recipient = this.wallets.get(this.activeWallet).publicKey,
 		amount
 	) {
 		const devnet = "https://api.devnet.solana.com";
-
-		const mainnet =
-			"https://solana-mainnet.g.alchemy.com/v2/su4NQiUu5uSE_3oMj-_riW_gHXqQPECJ";
+		const connection = new Connection(devnet, "confirmed");
 
 		if (!wallet || !wallet.publicKey) {
 			console.error("No wallet connected");
-			return;
+			this.activeWallet = null;
+			return { success: false, error: "No wallet connected" };
 		}
 
-		const connection = new Connection(devnet, "confirmed");
-
-		const transaction = new Transaction().add(
-			SystemProgram.transfer({
-				fromPubkey: wallet.publicKey,
-				toPubkey: new PublicKey(recipient),
-				lamports: amount * 10 ** 9, // Convertir SOL a lamports
-			})
-		);
-
 		try {
-			const { blockhash } = await connection.getLatestBlockhash();
+			// Obtener el latest blockhash
+			const { blockhash, lastValidBlockHeight } =
+				await connection.getLatestBlockhash();
 
-			// 2. Asignar el recentBlockhash a la transacción
+			// Crear la transacción
+			const transaction = new Transaction().add(
+				SystemProgram.transfer({
+					fromPubkey: wallet.publicKey,
+					toPubkey: new PublicKey(recipient),
+					lamports: amount * 10 ** 9, // Convertir SOL a lamports
+				})
+			);
+
+			// Asignar recentBlockhash y feePayer
 			transaction.recentBlockhash = blockhash;
-			transaction.feePayer = wallet.publicKey; // Establecer el fee payer (¡Importante!)
+			transaction.feePayer = wallet.publicKey;
 
-			// 3. Firmar la transacción
+			// Firmar la transacción
 			const signedTransaction = await wallet.signTransaction(transaction);
 
-			// 4. Serializar la transacción firmada
-			const serializedTransaction = signedTransaction.serialize();
-
-			// 5. Enviar la transacción
-			const { signature } = await connection.sendRawTransaction(
-				serializedTransaction
+			// Enviar la transacción
+			const signature = await connection.sendRawTransaction(
+				signedTransaction.serialize(),
+				{ skipPreflight: false, preflightCommitment: "confirmed" }
 			);
 
 			console.log("Transaction sent:", signature);
+
+			// Confirmar la transacción
+			const confirmation = await connection.confirmTransaction(
+				{ signature, blockhash, lastValidBlockHeight },
+				"confirmed"
+			);
+
+			if (confirmation.value.err) {
+				console.error("Transaction failed:", confirmation.value.err);
+				return { success: false, signature, error: confirmation.value.err };
+			}
+
+			console.log("Transaction confirmed:", signature);
+			return { success: true, signature };
 		} catch (error) {
 			console.error("Error sending transaction:", error);
+
+			// Si el error tiene logs, los capturamos
+			const logs = error.logs ? error.logs : undefined;
+			return { success: false, error, logs };
 		}
+	}
+
+	onNewWalletAvailable(callback) {
+		document.addEventListener("newWalletAvailable", () => {
+			const wallets = this.getWallets();
+			return callback(wallets);
+		});
+	}
+
+	onWalletConnected(callback) {
+		document.addEventListener("onWalletConnected", () => {
+			const activeWallet = this.getConnectedWallet();
+			return callback(activeWallet);
+		});
 	}
 }
 
