@@ -4,7 +4,7 @@
 	"main": "main.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "npx webpack && live-server"
+		"start": "npx webpack --watch && live-server"
 	},
 	"keywords": [],
 	"author": "",
@@ -21,8 +21,10 @@
 	},
 	"dependencies": {
 		"@solana/wallet-adapter-base": "^0.9.23",
+		"@solana/wallet-adapter-walletconnect": "^0.1.17",
 		"@solana/wallet-standard-wallet-adapter-base": "^1.1.4",
 		"@solana/web3.js": "^1.98.0",
+		"@types/telegram-web-app": "^7.10.1",
 		"@wallet-standard/core": "^1.1.0",
 		"bs58": "^6.0.0",
 		"solana-connect": "^0.1.10"

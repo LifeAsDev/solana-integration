@@ -1,6 +1,7 @@
 import { getWallets } from "@wallet-standard/core";
 import { isWalletAdapterCompatibleStandardWallet } from "@solana/wallet-adapter-base";
 import { StandardWalletAdapter } from "@solana/wallet-standard-wallet-adapter-base";
+import { WalletConnectWalletAdapter } from "@solana/wallet-adapter-walletconnect";
 import {
 	Connection,
 	PublicKey,
@@ -11,10 +12,11 @@ import {
 window.Buffer = require("buffer").Buffer;
 
 class SolanaWalletService {
-	constructor(net) {
+	constructor(net, isMobile) {
 		this.wallets = new Map();
 		this.net = net || "https://api.devnet.solana.com";
 		this.activeWallet = localStorage.getItem("activeWallet");
+		this.isMobile = isMobile;
 		this.initializeWallets();
 	}
 
@@ -27,8 +29,7 @@ class SolanaWalletService {
 				console.log("Adding wallet", newWallet.name);
 				const walletAdapter = new StandardWalletAdapter({ wallet: newWallet });
 				this.wallets.set(newWallet.name, walletAdapter);
-				const event = new Event("newWalletAvailable");
-				document.dispatchEvent(event);
+				document.dispatchEvent(new Event("newWalletAvailable"));
 
 				if (this.activeWallet === newWallet.name) {
 					this.connectWallet(newWallet.name, true);
@@ -36,44 +37,52 @@ class SolanaWalletService {
 			}
 		};
 
-		const availableWallets = getWallets();
-		availableWallets.get().forEach(addWallet);
-
-		this.walletsSubscription = availableWallets.on("register", addWallet); // Store for cleanup
+		if (this.isMobile) {
+			console.log("Inicializando WalletConnect...");
+			const walletConnect = new WalletConnectWalletAdapter({
+				network: "mainnet-beta",
+				options: {
+					relayUrl: "wss://relay.walletconnect.com",
+					metadata: { name: "Mi App" },
+				},
+			});
+			this.wallets.set("WalletConnect", walletConnect);
+		} else {
+			console.log("Inicializando Wallet Adapter estándar...");
+			const availableWallets = getWallets();
+			availableWallets.get().forEach(addWallet);
+			this.walletsSubscription = availableWallets.on("register", addWallet);
+		}
 	}
 
 	async connectWallet(walletName, skipStorage = false) {
 		try {
 			const wallet = this.wallets.get(walletName);
+			if (!wallet) throw new Error(`Wallet not found: ${walletName}`);
 
-			if (!wallet) {
-				throw new Error(`Wallet not found: ${walletName}`);
-			}
 			await wallet.connect();
-
 			if (!wallet.connected || !wallet.publicKey) {
 				localStorage.removeItem("activeWallet");
 				throw new Error(`Wallet not connected: ${walletName}`);
 			}
+
 			wallet.on("disconnect", () => {
 				wallet.removeListener("disconnect");
 				console.log("Disconnected", wallet.name);
 				this.activeWallet = null;
 				localStorage.removeItem("activeWallet");
-				const event = new Event("onWalletDisconnected");
-				document.dispatchEvent(event);
+				document.dispatchEvent(new Event("onWalletDisconnected"));
 			});
 
 			this.activeWallet = walletName;
-			const event = new Event("onWalletConnected");
-			document.dispatchEvent(event);
+			document.dispatchEvent(new Event("onWalletConnected"));
+
 			if (!skipStorage) {
 				localStorage.setItem("activeWallet", walletName);
 			}
 			return wallet;
 		} catch (error) {
 			localStorage.removeItem("activeWallet");
-
 			console.error("Error connecting wallet:", error);
 			throw error;
 		}
@@ -96,65 +105,45 @@ class SolanaWalletService {
 	}
 
 	getConnectedWallet() {
-		if (this.activeWallet) {
-			if (
-				this.wallets.get(this.activeWallet) &&
-				this.wallets.get(this.activeWallet).connected
-			)
-				return this.wallets.get(this.activeWallet) || null;
-		}
-		return null;
+		return this.activeWallet && this.wallets.get(this.activeWallet)?.connected
+			? this.wallets.get(this.activeWallet)
+			: null;
 	}
 
 	getWallets() {
-		if (this.wallets.size > 0) {
-			return Array.from(this.wallets.values()).map((wallet) => {
-				console.log({ wallet });
-
-				return {
+		return this.wallets.size > 0
+			? Array.from(this.wallets.values()).map((wallet) => ({
 					name: wallet.name,
 					iconUrl: wallet.icon,
-				};
-			});
-		}
-		return [];
+			  }))
+			: [];
 	}
 
-	async sendTransaction(
-		wallet = this.wallets.get(this.activeWallet),
-		recipient = this.wallets.get(this.activeWallet).publicKey,
-		amount
-	) {
+	async sendTransaction(walletName, recipient, amount) {
 		const connection = new Connection(this.net, "confirmed");
+		const wallet = this.wallets.get(walletName);
 
 		if (!wallet || !wallet.publicKey) {
 			console.error("No wallet connected");
-			this.activeWallet = null;
 			return { success: false, error: "No wallet connected" };
 		}
 
 		try {
-			// Obtener el latest blockhash
 			const { blockhash, lastValidBlockHeight } =
 				await connection.getLatestBlockhash();
 
-			// Crear la transacción
 			const transaction = new Transaction().add(
 				SystemProgram.transfer({
 					fromPubkey: wallet.publicKey,
 					toPubkey: new PublicKey(recipient),
-					lamports: Math.round(amount * 10 ** 9), // Convertir SOL a lamports
+					lamports: Math.round(amount * 10 ** 9),
 				})
 			);
 
-			// Asignar recentBlockhash y feePayer
 			transaction.recentBlockhash = blockhash;
 			transaction.feePayer = wallet.publicKey;
 
-			// Firmar la transacción
 			const signedTransaction = await wallet.signTransaction(transaction);
-
-			// Enviar la transacción
 			const signature = await connection.sendRawTransaction(
 				signedTransaction.serialize(),
 				{ skipPreflight: false, preflightCommitment: "confirmed" }
@@ -162,7 +151,6 @@ class SolanaWalletService {
 
 			console.log("Transaction sent:", signature);
 
-			// Confirmar la transacción
 			const confirmation = await connection.confirmTransaction(
 				{ signature, blockhash, lastValidBlockHeight },
 				"confirmed"
@@ -177,31 +165,24 @@ class SolanaWalletService {
 			return { success: true, signature };
 		} catch (error) {
 			console.error("Error sending transaction:", error);
-
-			// Si el error tiene logs, los capturamos
-			const logs = error.logs ? error.logs : undefined;
-			return { success: false, error, logs };
+			return { success: false, error, logs: error.logs || undefined };
 		}
 	}
 
 	onNewWalletAvailable(callback) {
-		document.addEventListener("newWalletAvailable", () => {
-			const wallets = this.getWallets();
-			return callback(wallets);
-		});
+		document.addEventListener("newWalletAvailable", () =>
+			callback(this.getWallets())
+		);
 	}
 
 	onWalletConnected(callback) {
-		document.addEventListener("onWalletConnected", () => {
-			const activeWallet = this.getConnectedWallet();
-			return callback(activeWallet);
-		});
+		document.addEventListener("onWalletConnected", () =>
+			callback(this.getConnectedWallet())
+		);
 	}
+
 	onWalletDisconnected(callback) {
-		document.addEventListener("onWalletConnected", () => {
-			const activeWallet = this.getConnectedWallet();
-			return callback(activeWallet);
-		});
+		document.addEventListener("onWalletDisconnected", () => callback(null));
 	}
 }
 

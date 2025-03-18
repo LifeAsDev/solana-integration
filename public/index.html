@@ -3,21 +3,52 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Solana Pay Demo</title>
-
+		<title>Solana Wallet Demo</title>
 		<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.75.0/lib/index.iife.min.js"></script>
+		<script type="module">
+			import SolanaWalletService from "./mainModule.js";
 
-		<script src="https://www.unpkg.com/solana-connect"></script>
+			const solanaWalletService = new SolanaWalletService(
+				"https://solana-mainnet.g.alchemy.com/v2/su4NQiUu5uSE_3oMj-_riW_gHXqQPECJ",
+				true
+			);
+
+			solanaWalletService.onWalletConnected((activeWallet) => {
+				const walletText = activeWallet
+					? `${activeWallet.name}\n${activeWallet.publicKey}`
+					: "No wallet connected";
+				document.getElementById("wallet-address").innerText = walletText;
+			});
+
+			solanaWalletService.onNewWalletAvailable((wallets) => {
+				const container = document.getElementById("wallets-container");
+				container.innerHTML = "";
+				wallets.forEach((wallet) => {
+					const img = document.createElement("img");
+					img.src = wallet.iconUrl;
+					img.alt = wallet.name;
+					img.width = 50;
+					img.height = 50;
+					img.style.margin = "5px";
+					img.onclick = () => solanaWalletService.connectWallet(wallet.name);
+					container.appendChild(img);
+				});
+			});
+
+			window.connectWallet = () =>
+				solanaWalletService.connectWallet("Solflare");
+			window.checkWallet = () =>
+				console.log(solanaWalletService.getConnectedWallet());
+			window.sendPayment = async () =>
+				await solanaWalletService.sendTransaction(undefined, undefined, 0.1);
+		</script>
 	</head>
 	<body>
-		<script src="../main.js"></script>
-
-		<h1>Solana Pay Demo</h1>
-		<button onclick="connectWallet()">Conectar Wallet</button>
-		<button onclick="check()">Check Wallet</button>
-
+		<h1>Solana Wallet Demo</h1>
+		<div id="wallets-container"></div>
 		<p id="wallet-address">No conectado</p>
+		<button onclick="connectWallet()">Conectar Wallet</button>
+		<button onclick="checkWallet()">Check Wallet</button>
 		<button onclick="sendPayment()">Pagar 0.1 SOL</button>
-		<button onclick="set()">set</button>
 	</body>
 </html>
