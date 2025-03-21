@@ -3,16 +3,67 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Solana Pay Demo</title>
+		<title>Solana Wallet Demo</title>
+		<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+		<script>
+			eruda.init();
+		</script>
+
+		<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.75.0/lib/index.iife.min.js"></script>
+		<script type="module">
+			import SolanaWalletService from "./public/mainModule.js";
+
+			/* 		const solanaWalletService = new SolanaWalletService(
+				"https://solana-mainnet.g.alchemy.com/v2/su4NQiUu5uSE_3oMj-_riW_gHXqQPECJ"
+			);
+ */
+			const solanaWalletService = new SolanaWalletService(false);
+
+			solanaWalletService.setMobile(true);
+
+			solanaWalletService.onWalletConnected((activeWallet) => {
+				const walletText = activeWallet
+					? `${activeWallet.name}\n${activeWallet.publicKey}`
+					: "No wallet connected";
+				document.getElementById("wallet-address").innerText = walletText;
+			});
+
+			solanaWalletService.onNewWalletAvailable((wallets) => {
+				const container = document.getElementById("wallets-container");
+				container.innerHTML = "";
+				const ul = document.createElement("ul");
+				wallets.forEach((wallet) => {
+					const li = document.createElement("li");
+					const img = document.createElement("img");
+					img.src = wallet.iconUrl;
+					img.alt = wallet.name;
+					img.width = 30;
+					img.height = 30;
+					img.style.marginRight = "5px";
+					const span = document.createElement("span");
+					span.textContent = wallet.name;
+					li.appendChild(img);
+					li.appendChild(span);
+					li.style.cursor = "pointer";
+					li.style.padding = "5px";
+					li.onclick = () => solanaWalletService.connectWallet(wallet.name);
+					ul.appendChild(li);
+				});
+				container.appendChild(ul);
+			});
+
+			window.connectWallet = () => solanaWalletService.transact();
+			window.checkWallet = () => solanaWalletService.sendMessage();
+			window.sendPayment = async () =>
+				await solanaWalletService.sendTransaction(undefined, undefined, 0.1);
+		</script>
 	</head>
 	<body>
-		<script type="module" src="./module.js"></script>
-		<h1>Solana Pay Demo</h1>
-		<button id="connect">Conectar Wallet</button>
-		<button id="check">Check Wallet</button>
-
-		<p id="wallet-address">No conectado</p>
-		<button id="pagar">Pagar 0.1 SOL</button>
+		<h1>Solana Wallet Demo</h1>
 		<div id="wallets-container"></div>
+		<p id="wallet-address">No conectado</p>
+		<button onclick="connectWallet()">Conectar Wallet</button>
+		<button onclick="checkWallet()">Check Wallet</button>
+		<button onclick="sendPayment()">Pagar 0.1 SOL</button>
 	</body>
 </html>

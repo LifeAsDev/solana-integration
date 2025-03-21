@@ -29,6 +29,9 @@ module.exports = {
 	},
 	resolve: {
 		extensions: [".js", ".mjs"],
+		alias: {
+			"react-native$": "react-native-web",
+		},
 	},
 	plugins: [
 		new ProvidePlugin({

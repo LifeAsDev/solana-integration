@@ -23,16 +23,25 @@
 			solanaWalletService.onNewWalletAvailable((wallets) => {
 				const container = document.getElementById("wallets-container");
 				container.innerHTML = "";
+				const ul = document.createElement("ul");
 				wallets.forEach((wallet) => {
+					const li = document.createElement("li");
 					const img = document.createElement("img");
 					img.src = wallet.iconUrl;
 					img.alt = wallet.name;
-					img.width = 50;
-					img.height = 50;
-					img.style.margin = "5px";
-					img.onclick = () => solanaWalletService.connectWallet(wallet.name);
-					container.appendChild(img);
+					img.width = 30;
+					img.height = 30;
+					img.style.marginRight = "5px";
+					const span = document.createElement("span");
+					span.textContent = wallet.name;
+					li.appendChild(img);
+					li.appendChild(span);
+					li.style.cursor = "pointer";
+					li.style.padding = "5px";
+					li.onclick = () => solanaWalletService.connectWallet(wallet.name);
+					ul.appendChild(li);
 				});
+				container.appendChild(ul);
 			});
 
 			window.connectWallet = () =>
