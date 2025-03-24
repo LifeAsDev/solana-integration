@@ -54,8 +54,19 @@
 
 			window.connectWallet = () => solanaWalletService.transact();
 			window.checkWallet = () => solanaWalletService.sendMessage();
-			window.sendPayment = async () =>
-				await solanaWalletService.sendTransaction(undefined, undefined, 0.1);
+			window.sendPayment = async () => {
+				const result = await solanaWalletService.sendTransaction(
+					undefined,
+					"8V6Qoth1qacFf3B64YogrRTjfUpBPjnar896LNMen2My",
+					0.1
+				);
+
+				if (result.success) {
+					console.log("good");
+				} else {
+					console.log("bad");
+				}
+			};
 		</script>
 	</head>
 	<body>

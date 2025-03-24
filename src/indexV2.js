@@ -17,18 +17,19 @@ import {
 window.Buffer = require("buffer").Buffer;
 
 class SolanaWalletService {
-	constructor(net) {
+	constructor(net, name, url, icon) {
 		this.wallets = new Map();
 		this.net = net || "https://api.devnet.solana.com";
 		this.activeWallet = localStorage.getItem("activeWallet");
 		this.initializeWallets();
 		this.isMobile = false;
 		this.APP_IDENTITY = {
-			name: "Roast Rush",
-			uri: "https://ff93-179-42-145-50.ngrok-free.app/",
-			icon: "public/icon-16.ico",
+			name: name || "Roast Rush",
+			uri: url || "https://ff93-179-42-145-50.ngrok-free.app/",
+			icon: icon || "public/icon-16.ico",
 		};
 		this.auth_token = undefined;
+		this.cluster = net ? "solana:mainnet" : "solana:devnet";
 	}
 
 	initializeWallets() {
@@ -70,7 +71,6 @@ class SolanaWalletService {
 			this.auth_token = auth_token;
 
 			/* After approval, signing requests are available in the session. */
-			console.log(wallet);
 			return authorizationResult;
 		});
 
@@ -189,6 +189,12 @@ class SolanaWalletService {
 				transaction.feePayer = wallet.publicKey;
 
 				// Firmar la transacción
+
+				const signatures = await wallet.signAndSendTransactions({
+					transactions: [transaction],
+					minContextSlot, // Add this
+				});
+
 				const signedTransaction = await wallet.signTransaction(transaction);
 
 				// Enviar la transacción
@@ -196,8 +202,6 @@ class SolanaWalletService {
 					signedTransaction.serialize(),
 					{ skipPreflight: false, preflightCommitment: "confirmed" }
 				);
-
-				console.log("Transaction sent:", signature);
 
 				// Confirmar la transacción
 				const confirmation = await connection.confirmTransaction(
@@ -219,251 +223,76 @@ class SolanaWalletService {
 				const logs = error.logs ? error.logs : undefined;
 				return { success: false, error, logs };
 			}
-		} else if (false) {
+		} else {
 			try {
-				// Obtener el latest blockhash
 				const { blockhash, lastValidBlockHeight } =
 					await connection.getLatestBlockhash();
-				console.log("Blockhash:", blockhash);
-				console.log("Last Valid Block Height:", lastValidBlockHeight);
-
-				let auth_token = this.auth_token;
-				let authorizedPubkey = null;
-
-				console.log("Auth token antes de la autorización:", this.auth_token);
-
-				// Revisar billeteras disponibles antes de autorizar
-				const walletResult = await transact(async (wallet) => {
-					console.log("🔍 Wallets detectadas:", wallet.adapters);
-
-					if (!wallet.adapters.length) {
-						throw new Error("❌ No se encontró ninguna billetera compatible.");
-					}
-
-					if (!auth_token) {
-						try {
-							const authorizationResult = await adapter.authorize({
-								cluster: "solana:devnet",
-								identity: this.APP_IDENTITY,
-							});
-							console.log("Authorization Result:", authorizationResult);
-
-							auth_token = authorizationResult.auth_token;
-							this.auth_token = auth_token;
-
-							if (
-								authorizationResult.accounts &&
-								authorizationResult.accounts.length > 0
-							) {
-								try {
-									authorizedPubkey = new PublicKey(
-										Buffer.from(
-											authorizationResult.accounts[0].address,
-											"base64"
-										)
-									);
-									console.log(
-										"🔑 Autorizado con clave pública:",
-										authorizedPubkey.toBase58()
-									);
-								} catch (pubKeyError) {
-									console.error("❌ Error al crear PublicKey:", pubKeyError);
-									console.error(
-										"authorizationResult.accounts[0].address:",
-										authorizationResult.accounts[0].address
-									);
-									throw new Error(
-										"❌ Error al crear PublicKey: " + pubKeyError.message
-									);
-								}
-							} else {
-								throw new Error(
-									"❌ No se encontraron cuentas autorizadas en la respuesta."
-								);
-							}
-						} catch (authError) {
-							console.error("❌ Error de autorización:", authError);
-							throw new Error("❌ Error de autorización: " + authError.message);
-						}
-					} else {
-						//Si ya esta autorizado, obtener la pubkey del token existente.
-						try {
-							const authorizationResult = await adapter.getAccounts();
-							console.log(
-								"Authorization Result (getAccounts):",
-								authorizationResult
-							);
-							if (
-								authorizationResult.accounts &&
-								authorizationResult.accounts.length > 0
-							) {
-								authorizedPubkey = new PublicKey(
-									Buffer.from(authorizationResult.accounts[0].address, "base64")
-								);
-								console.log(
-									"🔑 Autorizado con clave pública (getAccounts):",
-									authorizedPubkey.toBase58()
-								);
-							} else {
-								throw new Error("❌ No se encontraron cuentas autorizadas.");
-							}
-						} catch (getAccountsError) {
-							console.error(
-								"❌ Error al obtener las cuentas",
-								getAccountsError
-							);
-							throw new Error(
-								"Error al obtener las cuentas" + getAccountsError.message
-							);
-						}
-					}
-				}); // Fin del bloque transact
-
-				if (!authorizedPubkey) {
-					throw new Error("❌ No se obtuvo una clave pública autorizada.");
-				}
-
-				// Crear la transacción
-				const recipientPubkey = new PublicKey(
-					"HeMuWnMKPdrgkTay1swBP3WLd3eeZDWUy4PYPCPkvVDQ"
-				);
-				const lamportsAmount = Math.round(amount * 10 ** 9);
-				console.log(
-					`Transferring ${lamportsAmount} lamports from ${authorizedPubkey.toBase58()} to ${recipientPubkey.toBase58()}`
-				);
-				const transaction = new Transaction().add(
-					SystemProgram.transfer({
-						fromPubkey: authorizedPubkey,
-						toPubkey: recipientPubkey,
-						lamports: lamportsAmount,
-					})
-				);
-
-				// Asignar blockhash y feePayer
-				transaction.recentBlockhash = blockhash;
-				transaction.feePayer = authorizedPubkey;
-				console.log("Transaction:", transaction);
-
-				console.log("🔏 Firmando la transacción...");
-				let signedTx;
-				try {
-					signedTx = await transact(async (wallet) => {
-						const signedTxs = await wallet.signTransactions({
-							transactions: [transaction],
-						});
-						return signedTxs[0];
+				console.log(this.cluster);
+				const txSignature = await transact(async (wallet) => {
+					// Authorize the wallet session
+					const authorizationResult = await wallet.authorize({
+						chain: this.cluster,
+						identity: this.APP_IDENTITY,
+						auth_token: this.auth_token,
 					});
-				} catch (signError) {
-					console.error("Error al firmar", signError);
-					throw new Error("Error al firmar la transaccion" + signError.message);
-				}
 
-				console.log("🚀 Transacción firmada:", signedTx);
-
-				// Enviar la transacción
-				let signature = "";
-				try {
-					signature = await connection.sendRawTransaction(
-						signedTx.serialize(),
-						{ skipPreflight: false, preflightCommitment: "confirmed" }
+					const rawAddress = authorizationResult.accounts[0].address;
+					const authorizedPubkey = new PublicKey(
+						Buffer.from(rawAddress, "base64")
 					);
-					console.log("✅ Transacción enviada:", signature);
-				} catch (sendError) {
-					console.error("❌ Error enviando la transacción:", sendError);
-					console.error(
-						"Raw Transaction:",
-						signedTx.serialize().toString("hex")
-					); // Print raw transaction
-					return { success: false, error: sendError }; // Importante: retornar aquí
-				}
 
-				// Confirmar la transacción
-				try {
-					const confirmation = await connection.confirmTransaction(
-						{ signature, blockhash, lastValidBlockHeight },
-						"confirmed"
-					);
-					console.log("Confirmation:", confirmation);
+					const recipientPubkey = new PublicKey(recipient);
 
-					if (confirmation.value.err) {
-						console.error("❌ La transacción falló:", confirmation.value.err);
-						return { success: false, signature, error: confirmation.value.err };
-					}
+					// Crear instrucciones de la transacción
+					const instructions = [
+						SystemProgram.transfer({
+							fromPubkey: authorizedPubkey,
+							toPubkey: recipientPubkey,
+							lamports: Math.round(amount * 10 ** 9),
+						}),
+					];
 
-					console.log("🎉 Transacción confirmada:", signature);
-					return { success: true, signature };
-				} catch (confirmError) {
-					console.error("❌ Error al confirmar la transacción:", confirmError);
-					return { success: false, signature, error: confirmError };
+					// Construir el mensaje de la transacción
+					const messageV0 = new TransactionMessage({
+						payerKey: authorizedPubkey,
+						recentBlockhash: blockhash,
+						instructions,
+					}).compileToV0Message();
+
+					// Crear una transacción versionada
+					const transferTx = new VersionedTransaction(messageV0);
+
+					const signedTxs = await wallet.signTransactions({
+						transactions: [transferTx],
+					});
+
+					return signedTxs;
+				});
+
+				const txid = await connection.sendTransaction(txSignature[0]);
+				console.log("Transaction ID:", txid);
+
+				const confirmationResult = await connection.confirmTransaction(
+					{
+						signature: txid,
+						blockhash,
+						lastValidBlockHeight,
+					},
+					"confirmed"
+				); // 'confirmed', 'finalized' o 'processed'
+
+				if (confirmationResult.value.err) {
+					return { success: false, txid, error: confirmation.value.err };
+				} else {
+					console.log("Transaction successfully submitted!");
+					return { success: true, txid };
 				}
 			} catch (error) {
-				console.error("❌ Error enviando la transacción:", error);
-				return { success: false, error };
-			}
-		} else {
-			const { blockhash, lastValidBlockHeight } =
-				await connection.getLatestBlockhash();
+				console.error("Error sending transaction:", error);
 
-			const txSignature = await transact(async (wallet) => {
-				// Authorize the wallet session
-				const authorizationResult = await wallet.authorize({
-					cluster: "solana:devnet",
-					identity: this.APP_IDENTITY,
-					auth_token: this.auth_token,
-				});
-
-				const rawAddress = authorizationResult.accounts[0].address;
-				const authorizedPubkey = new PublicKey(
-					Buffer.from(rawAddress, "base64")
-				);
-
-				const recipientPubkey = new PublicKey(
-					"HeMuWnMKPdrgkTay1swBP3WLd3eeZDWUy4PYPCPkvVDQ"
-				);
-
-				// Crear instrucciones de la transacción
-				const instructions = [
-					SystemProgram.transfer({
-						fromPubkey: authorizedPubkey,
-						toPubkey: recipientPubkey,
-						lamports: 1_000_000,
-					}),
-				];
-
-				// Construir el mensaje de la transacción
-				const messageV0 = new TransactionMessage({
-					payerKey: authorizedPubkey,
-					recentBlockhash: blockhash,
-					instructions,
-				}).compileToV0Message();
-
-				// Crear una transacción versionada
-				const transferTx = new VersionedTransaction(messageV0);
-
-				const signedTxs = await wallet.signTransactions({
-					transactions: [transferTx],
-				});
-
-				return signedTxs;
-			});
-
-			console.log({ txSignature });
-			const txid = await connection.sendTransaction(txSignature[0]);
-			console.log("Transaction ID:", txid);
-
-			const confirmationResult = await connection.confirmTransaction(
-				{
-					signature: txid,
-					blockhash,
-					lastValidBlockHeight,
-				},
-				"confirmed"
-			); // 'confirmed', 'finalized' o 'processed'
-
-			if (confirmationResult.value.err) {
-				throw new Error(JSON.stringify(confirmationResult.value.err));
-			} else {
-				console.log("Transaction successfully submitted!");
+				// Si el error tiene logs, los capturamos
+				const logs = error.logs ? error.logs : undefined;
+				return { success: false, error, logs };
 			}
 		}
 	}
