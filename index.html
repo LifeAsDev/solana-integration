@@ -13,12 +13,16 @@
 		<script type="module">
 			import SolanaWalletService from "./public/mainModule.js";
 
-			/* 		const solanaWalletService = new SolanaWalletService(
-				"https://solana-mainnet.g.alchemy.com/v2/su4NQiUu5uSE_3oMj-_riW_gHXqQPECJ"
+			/* 	const solanaWalletService = new SolanaWalletService(
+				"https://solana-mainnet.g.alchemy.com/v2/73UFDvN5Xdz8208NB6hq-QA6_qfozJJe"
 			);
  */
-			const solanaWalletService = new SolanaWalletService(false);
+			const solanaWalletService = new SolanaWalletService(
+				"https://yolo-fragrant-dust.solana-mainnet.quiknode.pro/b183ad3499665f3713373af8c3be504e58334320/"
+			);
 
+			/* const solanaWalletService = new SolanaWalletService(false);
+			 */
 			solanaWalletService.setMobile(true);
 
 			solanaWalletService.onWalletConnected((activeWallet) => {
@@ -57,9 +61,11 @@
 			window.sendPayment = async () => {
 				const result = await solanaWalletService.sendTransaction(
 					undefined,
-					"8V6Qoth1qacFf3B64YogrRTjfUpBPjnar896LNMen2My",
-					0.1
+					"4y1CNFPtBYi7ymapm6SdCm9GZKAW4gPe3PYYPaZGew4",
+					0.00008
 				);
+
+				console.log({ result });
 
 				if (result.success) {
 					console.log("good");
