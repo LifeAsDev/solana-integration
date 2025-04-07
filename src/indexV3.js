@@ -61,20 +61,34 @@ class SolanaWalletService {
 	}
 
 	async transact() {
-		const authorizationResult = await transact(async (wallet) => {
-			const authorizationResult = await wallet.authorize({
-				chain: this.cluster,
-				identity: this.APP_IDENTITY,
+		try {
+			const authorizationResult = await transact(async (wallet) => {
+				const authorizationResult = await wallet.authorize({
+					chain: this.cluster,
+					identity: this.APP_IDENTITY,
+				});
+
+				const auth_token = authorizationResult.auth_token;
+				this.auth_token = auth_token;
+
+				/* After approval, signing requests are available in the session. */
+				return authorizationResult;
 			});
 
-			const auth_token = authorizationResult.auth_token;
-			this.auth_token = auth_token;
+			if (!authorizationResult) {
+				console.error("Authorization failed");
+				return { success: false, error: "Authorization failed" };
+			}
 
-			/* After approval, signing requests are available in the session. */
-			return authorizationResult;
-		});
-
-		console.log("Connected to: " + authorizationResult.accounts[0].address);
+			console.log("Connected to: " + authorizationResult.accounts[0].address);
+			return {
+				success: true,
+				address: authorizationResult.accounts[0].address,
+			};
+		} catch (error) {
+			console.error("Error during transaction:", error);
+			return { success: false, error: error.message || "Unknown error" };
+		}
 	}
 
 	async connectWallet(walletName, skipStorage = false) {
@@ -167,7 +181,7 @@ class SolanaWalletService {
 			this.activeWallet = null;
 			return { success: false, error: "No wallet connected" };
 		}
-
+		console.log(this.isMobile);
 		if (!this.isMobile) {
 			if (!recipient) recipient = this.wallets.get(this.activeWallet).publicKey;
 			try {
@@ -311,10 +325,11 @@ class SolanaWalletService {
 			message.split("").map((c) => c.charCodeAt(0))
 		);
 
+		console.log({ cluster: this.cluster });
 		const signedMessages = await transact(async (wallet) => {
 			// Authorize the wallet session.
 			const authorizationResult = await wallet.authorize({
-				cluster: "solana:devnet",
+				chain: this.cluster,
 				identity: this.APP_IDENTITY,
 				auth_token: this.auth_token,
 			});

@@ -23,7 +23,7 @@
 
 			/* const solanaWalletService = new SolanaWalletService(false);
 			 */
-			solanaWalletService.setMobile(true);
+			solanaWalletService.setMobile(false);
 
 			solanaWalletService.onWalletConnected((activeWallet) => {
 				const walletText = activeWallet
@@ -56,7 +56,7 @@
 				container.appendChild(ul);
 			});
 
-			window.connectWallet = () => solanaWalletService.transact();
+			window.connectWallet = () => solanaWalletService.connectWallet("Phantom");
 			window.checkWallet = () => solanaWalletService.sendMessage();
 			window.sendPayment = async () => {
 				const result = await solanaWalletService.sendTransaction(
