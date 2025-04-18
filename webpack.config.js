@@ -4,7 +4,7 @@ const { ProvidePlugin } = require("webpack"); // Usa require
 module.exports = {
 	// Usa module.exports
 	mode: "production",
-	entry: "./src/indexV3.js",
+	entry: "./src/reown.js",
 	output: {
 		path: path.resolve(__dirname, "public"),
 		filename: "mainModule.js",
