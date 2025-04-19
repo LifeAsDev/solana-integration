@@ -31,10 +31,12 @@
 		"@solana/wallet-standard-wallet-adapter-base": "^1.1.4",
 		"@solana/web3.js": "^1.98.0",
 		"@types/telegram-web-app": "^7.10.1",
+		"@wagmi/core": "^2.16.7",
 		"@wallet-standard/core": "^1.1.0",
 		"@walletconnect/client": "^1.8.0",
 		"bs58": "^6.0.0",
 		"react-native-quick-base64": "^2.1.2",
-		"solana-connect": "^0.1.10"
+		"solana-connect": "^0.1.10",
+		"viem": "^2.27.2"
 	}
 }

@@ -64,6 +64,27 @@ class SolanaWalletService {
 		this.auth_token = undefined;
 	}
 
+	async getAccountStatus() {
+		console.log("wait");
+		let acct = modal.getAccount("solana");
+		if (acct && acct.status !== "connecting") {
+			return acct;
+		} else if (acct) {
+			acct = await this.waitForFinalAccountStatus();
+		}
+		return acct;
+	}
+
+	async waitForFinalAccountStatus() {
+		return new Promise((resolve) => {
+			const unsubscribe = modal.subscribeAccount((account) => {
+				if (account.status !== "connecting") {
+					resolve(account);
+				}
+			}, "solana");
+		});
+	}
+
 	initializeWallets() {
 		// const account = modal.getAccount()
 
@@ -92,6 +113,7 @@ class SolanaWalletService {
 			const unsubscribe = modal.subscribeState((state) => {
 				if (!state.open) {
 					unsubscribe();
+					console.log({ state });
 					resolve(modal.getAccount("solana"));
 				}
 			});

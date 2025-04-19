@@ -75,6 +75,18 @@
 					console.log("bad");
 				}
 			};
+
+			const acct23 = await solanaWalletService.getAccountStatus();
+
+			console.log(acct23);
+
+			if (acct23 && acct23.isConnected && acct23.address) {
+				console.log("Hay cuenta conectada", acct23.address);
+			} else if (acct23 && acct23.isConnected) {
+				console.log("Hay cuenta conectada pero sin address");
+			} else {
+				console.log("No hay cuenta conectada");
+			}
 		</script>
 	</head>
 	<body>
