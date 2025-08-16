@@ -39,6 +39,19 @@ const MEMO_PROGRAM_ID = new PublicKey(
 );
 
 const yourWalletAddress = new PublicKey(process.env.DESTINATION_ADDRESS);
+function addPoints(userData, points, currentSeason) {
+	if (!userData.masterScore) {
+		userData.masterScore = {};
+	}
+	const seasonKey = `season${currentSeason}`;
+
+	userData.masterScore.global = (userData.masterScore.global || 0) + points;
+
+	userData.masterScore[seasonKey] =
+		(userData.masterScore[seasonKey] || 0) + points;
+
+	return userData;
+}
 
 const packagesUSD = [
 	{ priceUSD: 1, tokens: 100 },
@@ -241,27 +254,31 @@ app.post("/send-transaction", async (req, res) => {
 app.post("/auth/nonce", async (req, res) => {
 	const body = req.body;
 	const token = req.headers.authorization?.split(" ")[1];
-	const { address } = body;
+	const { address, referKey } = body;
 	const nonce =
 		Math.random().toString(36).substring(2, 15) +
 		Math.random().toString(36).substring(2, 15);
+	console.log(address, referKey);
 	const usersRef = db.ref(`users/${address}`);
 	if (token) {
 		try {
 			const decoded = jwt.verify(token, secretKey);
-			const userToken = jwt.sign({ publicKey: address }, secretKey, {
-				expiresIn: "600h",
-			});
-			const snapshot = await usersRef.get();
+			if (decoded.publicKey !== address) {
+			} else {
+				const userToken = jwt.sign({ publicKey: address }, secretKey, {
+					expiresIn: "600h",
+				});
 
-			const userData = snapshot.val();
-			console.log(userData);
-			return res.json({
-				success: true,
-				token: userToken,
-				account: { address },
-				userData,
-			});
+				const snapshot = await usersRef.get();
+				const userData = snapshot.val();
+
+				return res.json({
+					success: true,
+					token: userToken,
+					account: { address },
+					userData,
+				});
+			}
 		} catch (err) {
 			console.error("Token invalid:", err);
 		}
@@ -269,7 +286,7 @@ app.post("/auth/nonce", async (req, res) => {
 	usersRef.once("value").then((snapshot) => {
 		if (!snapshot.exists()) {
 			usersRef
-				.set({ ...userModel, nonce })
+				.set({ ...userModel, nonce, referKey: referKey || null })
 				.then(() => res.status(201).json({ success: true, nonce }))
 				.catch((err) => res.status(500).json({ error: err.message }));
 		} else {
@@ -342,6 +359,223 @@ app.post("/auth/login", async (req, res) => {
 		console.error("Error:", error);
 		res.status(500).json({ error });
 	}
+});
+const powerUps = {
+	doubleJump: 30,
+	doublePoints: 20,
+	doubleSpeed: 10,
+	moreEnemy: 50,
+	moreStar: 30,
+	burn: 10,
+};
+app.post("/api/buy-powerup", async (req, res) => {
+	const { powerUpId } = req.body;
+	const token = req.headers.authorization?.split(" ")[1]; // "Bearer <token>"
+	if (!token) return res.status(401).json({ error: "No token provided" });
+
+	const payload = jwt.verify(token, process.env.JWT_SECRET);
+	const addressFromToken = payload.publicKey;
+
+	if (!powerUps.hasOwnProperty(powerUpId)) {
+		return res.status(400).json({ error: "Invalid power-up" });
+	}
+
+	const cost = powerUps[powerUpId];
+	const userRef = db.ref(`users/${addressFromToken}`);
+	console.log(addressFromToken, powerUpId, cost);
+	const seasonKeyRef = db.ref("season");
+	const currentSeason = (await seasonKeyRef.get()).val();
+
+	userRef
+		.transaction((userData) => {
+			console.log("Transaction started", userData);
+			if (userData === null) {
+				return null;
+			}
+
+			let currentTokens = userData.roasterToken || 0;
+			if (currentTokens < cost) {
+				console.log("Insufficient funds", currentTokens, cost);
+				return;
+			}
+			userData.roasterToken = currentTokens - cost;
+
+			if (powerUpId === "burn") {
+				userData = addPoints(userData, 1000, currentSeason);
+			} else {
+				userData[powerUpId] = (userData[powerUpId] || 0) + 1;
+			}
+
+			return userData;
+		})
+		.then((result) => {
+			if (result.committed) {
+				res.status(200).json({
+					success: true,
+					message: "Purchase successful",
+					newRoasterTokens: result.snapshot.val().roasterToken,
+					powerUp: { [powerUpId]: result.snapshot.val()[powerUpId] },
+				});
+			} else {
+				res.status(400).json({
+					success: false,
+					message:
+						"Purchase failed. Insufficient funds or user does not exist.",
+				});
+			}
+		})
+		.catch((error) => {
+			res.status(500).json({
+				success: false,
+				message: "Server error during purchase.",
+				error: error.message,
+			});
+		});
+});
+
+app.get("/api/leaderboard/season", async (req, res) => {
+	try {
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token) return res.status(401).json({ error: "No token provided" });
+
+		const payload = jwt.verify(token, process.env.JWT_SECRET);
+		const addressFromToken = payload.publicKey;
+
+		const currentSeason = (await db.ref("season").get()).val();
+
+		const usersSnap = await db.ref("users").get();
+		const users = usersSnap.val() || {};
+
+		let leaderboard = Object.entries(users).map(([userId, userData]) => {
+			const score = userData?.masterScore?.[`season${currentSeason}`] || 0;
+			return {
+				id: userId.slice(0, 4),
+				score,
+				isYou: userId === addressFromToken,
+			};
+		});
+
+		leaderboard.sort((a, b) => b.score - a.score);
+		leaderboard = leaderboard.slice(0, 10);
+
+		res.json({ success: true, leaderboard });
+	} catch (err) {
+		console.error("Leaderboard season error:", err);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+});
+function updateLevelProgress(userData, levelId, score, stars, currentSeason) {
+	levelId = `level${levelId}`; // level1, level2, level3
+
+	if (!userData.levels) userData.levels = {};
+	if (!userData.masterScore) userData.masterScore = {};
+
+	if (!userData.levels[levelId]) {
+		userData.levels[levelId] = { highScore: 0, stars: 0 };
+	}
+
+	if (score > (userData.levels[levelId].highScore || 0)) {
+		userData.levels[levelId].highScore = score;
+	}
+
+	if (stars > (userData.levels[levelId].stars || 0)) {
+		userData.levels[levelId].stars = stars;
+	}
+
+	for (const key of Object.keys(powerUps)) {
+		if (key != "burn" && userData[key] > 0) {
+			userData[key] -= 1;
+		}
+	}
+
+	userData.masterScore.global = (userData.masterScore.global || 0) + score;
+	const seasonKey = `season${currentSeason}`;
+	userData.masterScore[seasonKey] =
+		(userData.masterScore[seasonKey] || 0) + score;
+
+	return userData;
+}
+
+app.get("/api/leaderboard/global", async (req, res) => {
+	try {
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token) return res.status(401).json({ error: "No token provided" });
+
+		const payload = jwt.verify(token, process.env.JWT_SECRET);
+		const addressFromToken = payload.publicKey;
+
+		const usersSnap = await db.ref("users").get();
+		const users = usersSnap.val() || {};
+
+		let leaderboard = Object.entries(users).map(([userId, userData]) => {
+			const score = userData?.masterScore?.global || 0;
+			return {
+				id: userId.slice(0, 4),
+				score,
+				isYou: userId === addressFromToken,
+			};
+		});
+
+		leaderboard.sort((a, b) => b.score - a.score);
+		leaderboard = leaderboard.slice(0, 10);
+
+		res.json({ success: true, leaderboard });
+	} catch (err) {
+		console.error("Leaderboard global error:", err);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+});
+app.post("/api/update-level", async (req, res) => {
+	const { levelId, score, stars } = req.body;
+	const token = req.headers.authorization?.split(" ")[1];
+	if (!token) return res.status(401).json({ error: "No token provided" });
+
+	const payload = jwt.verify(token, process.env.JWT_SECRET);
+	const addressFromToken = payload.publicKey;
+
+	const currentSeason = (await db.ref("season").get()).val();
+	const userRef = db.ref(`users/${addressFromToken}`);
+
+	userRef
+		.transaction((userData) => {
+			if (userData === null) return null;
+
+			userData = updateLevelProgress(
+				userData,
+				levelId,
+				score,
+				stars,
+				currentSeason
+			);
+			return userData;
+		})
+		.then(async (result) => {
+			if (!result.committed) {
+				return res.json({ success: false, message: "Update failed" });
+			}
+
+			const userData = result.snapshot.val();
+			if (levelId === "4" && userData.referKey) {
+				const refererAddress = userData.referKey;
+				const refererRef = db.ref(`users/${refererAddress}`);
+
+				const refererSnap = await refererRef.get();
+				const refererData = refererSnap.val() || {};
+				refererData.roasterToken = (refererData.roasterToken || 0) + 20;
+				await refererRef.update({ roasterToken: refererData.roasterToken });
+
+				await userRef.update({ referKey: null });
+			}
+
+			res.json({
+				success: true,
+				level: userData.levels[levelId],
+				masterScore: userData.masterScore,
+			});
+		})
+		.catch((error) => {
+			res.status(500).json({ success: false, error: error.message });
+		});
 });
 
 app.get("/", (req, res) => {

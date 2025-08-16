@@ -91,7 +91,8 @@ class SolanaWalletService {
 		this.isMobile = isMobile;
 	}
 
-	async connectWallet() {
+	async connectWallet(referKey) {
+		console.log(referKey);
 		return new Promise(async (resolve, reject) => {
 			const requestNonce = async (address, token) => {
 				const headers = { "Content-Type": "application/json" };
@@ -100,7 +101,7 @@ class SolanaWalletService {
 				const apiResponse = await fetch(`${this.backendUrl}/auth/nonce`, {
 					method: "POST",
 					headers: headers,
-					body: JSON.stringify({ address }),
+					body: JSON.stringify({ address, referKey }),
 				});
 				if (!apiResponse.ok) throw new Error("Error in call a /auth/nonce");
 				return apiResponse.json();
