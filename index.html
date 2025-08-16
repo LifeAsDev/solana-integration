@@ -4,89 +4,96 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Solana Wallet Demo</title>
-		<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-		<script>
-			eruda.init();
-		</script>
 
 		<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.75.0/lib/index.iife.min.js"></script>
 		<script type="module">
 			import SolanaWalletService from "./public/mainModule.js";
+			import {
+				Transaction as SolanaTransaction,
+				Buffer,
+				solanaProvider,
+				modal,
+			} from "./public/mainModule.js";
+			const backendUrl = "http://localhost:3000"; // Cambia esto a tu URL de backend si es necesario
+			/*
+						const solanaWalletService = new SolanaWalletService({
+							backendUrl: backendUrl,
+							net: "https://yolo-fragrant-dust.solana-mainnet.quiknode.pro/b183ad3499665f3713373af8c3be504e58334320/",
+						}); */
 
-			/* 	const solanaWalletService = new SolanaWalletService(
-				"https://solana-mainnet.g.alchemy.com/v2/73UFDvN5Xdz8208NB6hq-QA6_qfozJJe"
-			);
- */
-			const solanaWalletService = new SolanaWalletService(
-				"https://yolo-fragrant-dust.solana-mainnet.quiknode.pro/b183ad3499665f3713373af8c3be504e58334320/"
-			);
-
-			/* const solanaWalletService = new SolanaWalletService(false);
-			 */
-			/* 	solanaWalletService.setMobile(false);
-
-			solanaWalletService.onWalletConnected((activeWallet) => {
-				const walletText = activeWallet
-					? `${activeWallet.name}\n${activeWallet.publicKey}`
-					: "No wallet connected";
-				document.getElementById("wallet-address").innerText = walletText;
+			const solanaWalletService = new SolanaWalletService({
+				backendUrl: backendUrl,
+				net: "https://api.devnet.solana.com",
 			});
 
-			solanaWalletService.onNewWalletAvailable((wallets) => {
-				const container = document.getElementById("wallets-container");
-				container.innerHTML = "";
-				const ul = document.createElement("ul");
-				wallets.forEach((wallet) => {
-					const li = document.createElement("li");
-					const img = document.createElement("img");
-					img.src = wallet.iconUrl;
-					img.alt = wallet.name;
-					img.width = 30;
-					img.height = 30;
-					img.style.marginRight = "5px";
-					const span = document.createElement("span");
-					span.textContent = wallet.name;
-					li.appendChild(img);
-					li.appendChild(span);
-					li.style.cursor = "pointer";
-					li.style.padding = "5px";
-					li.onclick = () => solanaWalletService.connectWallet(wallet.name);
-					ul.appendChild(li);
-				});
-				container.appendChild(ul);
-			});
- */
+			let token = null;
+
 			solanaWalletService.transact();
-			window.connectWallet = () => solanaWalletService.connectWallet("");
-
+			window.connectWallet = async () => {
+				const rest = await solanaWalletService.connectWallet();
+				console.log(rest);
+				token = rest.token || null;
+				console.log("Token:", token);
+			};
 			window.checkWallet = () => solanaWalletService.sendMessage();
-			window.sendPayment = async () => {
-				const result = await solanaWalletService.sendTransaction(
-					undefined,
-					"4y1CNFPtBYi7ymapm6SdCm9GZKAW4gPe3PYYPaZGew4",
-					0.00008
-				);
+			window.sendPayment = async (pack) => {
+				const requestTransaction = async (address, pack) => {
+					const headers = { "Content-Type": "application/json" };
+					if (token) headers["Authorization"] = `Bearer ${token}`;
+					const apiResponse = await fetch(`${backendUrl}/create-transaction`, {
+						method: "POST",
+						headers: headers,
+						body: JSON.stringify({ payerAddress: address, packageId: pack }),
+					});
+					if (!apiResponse.ok)
+						throw new Error("Error in call a /create-transaction");
+					return apiResponse.json();
+				};
 
-				console.log({ result });
+				const sendSignedTransaction = async (signedTransactionBase64) => {
+					const headers = { "Content-Type": "application/json" };
+					if (token) headers["Authorization"] = `Bearer ${token}`;
 
-				if (result.success) {
-					console.log("good");
-				} else {
-					console.log("bad");
+					const apiResponse = await fetch(`${backendUrl}/send-transaction`, {
+						method: "POST",
+						headers: headers,
+						body: JSON.stringify({
+							signedTransaction: signedTransactionBase64,
+						}),
+					});
+
+					if (!apiResponse.ok)
+						throw new Error("Error calling /send-transaction");
+
+					return apiResponse.json();
+				};
+				if (!token) return { success: false, error: "No token found" };
+				let acct = modal.getAccount("solana");
+				if (!acct && !acct.address) {
+					acct = await this.connectWallet();
+					if (!acct) {
+						console.error("No account found");
+						return { success: false };
+					}
+				}
+				const addressFrom = acct.address;
+
+				const transactionResponse = await requestTransaction(addressFrom, pack);
+				const transaction = transactionResponse.transaction;
+				if (transaction) {
+					const bufferTx = Buffer.from(transaction, "base64");
+
+					const transactionFrom = SolanaTransaction.from(bufferTx);
+
+					const signedTransaction = await solanaProvider.signTransaction(
+						transactionFrom
+					);
+					const signedTransactionResponse = await sendSignedTransaction(
+						signedTransaction.serialize().toString("base64")
+					);
+					console.log("Transaction sent:", signedTransactionResponse);
 				}
 			};
-
-			const acct23 = await solanaWalletService.getAccountStatus();
-
-			console.log(acct23);
-
-			if (acct23 && acct23.isConnected && acct23.address) {
-				console.log("Hay cuenta conectada", acct23.address);
-			} else if (acct23 && acct23.isConnected) {
-				console.log("Hay cuenta conectada pero sin address");
-			} else {
-				console.log("No hay cuenta conectada");
-			}
 		</script>
 	</head>
 	<body>
@@ -95,6 +102,11 @@
 		<p id="wallet-address">No conectado</p>
 		<button onclick="connectWallet()">Conectar Wallet</button>
 		<button onclick="checkWallet()">Check Wallet</button>
-		<button onclick="sendPayment()">Pagar 0.1 SOL</button>
+		<button onclick="sendPayment(0)">1$</button>
+		<button onclick="sendPayment(1)">2$</button>
+		<button onclick="sendPayment(2)">4$</button>
+		<button onclick="sendPayment(3)">10$</button>
+		<button onclick="sendPayment(4)">20$</button>
+		<button onclick="sendPayment(5)">50$</button>
 	</body>
 </html>

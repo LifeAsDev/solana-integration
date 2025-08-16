@@ -1,5 +1,5 @@
 const path = require("path");
-const { ProvidePlugin } = require("webpack"); // Usa require
+const webpack = require("webpack");
 
 module.exports = {
 	// Usa module.exports
@@ -28,13 +28,14 @@ module.exports = {
 		],
 	},
 	resolve: {
-		extensions: [".js", ".mjs"],
-		alias: {
-			"react-native$": "react-native-web",
+		fallback: {
+			stream: require.resolve("stream-browserify"),
+			crypto: require.resolve("crypto-browserify"),
+			buffer: require.resolve("buffer/"),
 		},
 	},
 	plugins: [
-		new ProvidePlugin({
+		new webpack.ProvidePlugin({
 			Buffer: ["buffer", "Buffer"],
 		}),
 	],

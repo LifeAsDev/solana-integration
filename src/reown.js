@@ -8,6 +8,7 @@ import {
 	SystemProgram,
 	Connection,
 } from "@solana/web3.js";
+import { Buffer } from "buffer";
 
 const solanaWeb3JsAdapter = new SolanaAdapter();
 
@@ -49,12 +50,13 @@ modal.subscribeProviders((state) => {
 }); */
 
 class SolanaWalletService {
-	constructor(net, name, url, icon) {
+	constructor({ net, name, url, icon, backendUrl }) {
 		this.wallets = new Map();
 		this.activeWallet = this.getConnectedWallet();
 		// this.initializeWallets();
 
 		this.isMobile = false;
+		this.backendUrl = backendUrl; // guardamos la URL del backend
 
 		this.APP_IDENTITY = {
 			name: name || "Roast Rush",
@@ -85,36 +87,75 @@ class SolanaWalletService {
 		});
 	}
 
-	initializeWallets() {
-		// const account = modal.getAccount()
-
-		// modal.open()
-		console.log("Initializing wallet");
-	}
-
 	setMobile(isMobile) {
 		this.isMobile = isMobile;
 	}
 
-	async transact() {
-		console.log("Transact called");
-	}
-
 	async connectWallet() {
-		return new Promise(async (resolve) => {
-			console.log("connectWallet called");
+		return new Promise(async (resolve, reject) => {
+			const requestNonce = async (address, token) => {
+				const headers = { "Content-Type": "application/json" };
+				if (token) headers["Authorization"] = `Bearer ${token}`;
+
+				const apiResponse = await fetch(`${this.backendUrl}/auth/nonce`, {
+					method: "POST",
+					headers: headers,
+					body: JSON.stringify({ address }),
+				});
+				if (!apiResponse.ok) throw new Error("Error in call a /auth/nonce");
+				return apiResponse.json();
+			};
+
+			const handleWallet = async (wallet) => {
+				try {
+					const localToken = localStorage.getItem(`jwt-${wallet.address}`);
+
+					const nonceData = await requestNonce(wallet.address, localToken);
+					console.log(nonceData);
+					if (nonceData.token) {
+						localStorage.setItem(`jwt-${wallet.address}`, nonceData.token);
+						resolve({ ...nonceData, account: wallet });
+						return;
+					}
+
+					const message = new TextEncoder().encode(nonceData.nonce);
+					const signed = await solanaProvider.signMessage(message);
+
+					const loginResponse = await fetch(`${this.backendUrl}/auth/login`, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							publicKey: wallet.address,
+							signature: signed,
+							nonce: nonceData.nonce,
+						}),
+					});
+
+					if (!loginResponse.ok) throw new Error("Login failed");
+					const loginData = await loginResponse.json();
+
+					resolve(loginData);
+				} catch (err) {
+					reject(err);
+				}
+			};
+
 			const acct = modal.getAccount("solana");
 			if (acct && acct.isConnected) {
-				resolve(acct);
-				console.log(acct);
+				handleWallet(acct);
 				return;
 			}
+
 			modal.open();
 			const unsubscribe = modal.subscribeState((state) => {
 				if (!state.open) {
 					unsubscribe();
-					console.log({ state });
-					resolve(modal.getAccount("solana"));
+					const wallet = modal.getAccount("solana");
+					if (!wallet) {
+						reject(new Error("No wallet connected"));
+						return;
+					}
+					handleWallet(wallet);
 				}
 			});
 		});
@@ -191,19 +232,7 @@ class SolanaWalletService {
 			return { success: false, error: error.message };
 		}
 	}
-	async sendMessage() {
-		console.log("Send message called");
-	}
-	onNewWalletAvailable(callback) {
-		console.log("Wallet avaiable callback");
-	}
-
-	onWalletConnected(callback) {
-		console.log("Wallet connected callback wtf");
-	}
-	onWalletDisconnected(callback) {
-		console.log("Wallet disconnect called");
-	}
 }
 
 export default SolanaWalletService;
+export { solanaProvider, modal, Transaction, Buffer };
