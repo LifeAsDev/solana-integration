@@ -525,6 +525,8 @@ app.get("/api/leaderboard/global", async (req, res) => {
 		res.status(500).json({ success: false, message: "Server error" });
 	}
 });
+const minIntervalBetweenSubmits = 15 * 1000;
+
 app.post("/api/update-level", async (req, res) => {
 	const { levelId, score, stars } = req.body;
 	const token = req.headers.authorization?.split(" ")[1];
@@ -538,7 +540,27 @@ app.post("/api/update-level", async (req, res) => {
 
 	userRef
 		.transaction((userData) => {
-			if (userData === null) return null;
+			if (!userData) return null;
+
+			const now = Date.now();
+
+			if (
+				userData.lastSubmitAt &&
+				now - userData.lastSubmitAt < minIntervalBetweenSubmits
+			) {
+				console.log("Rate limit exceeded");
+				userData.rateLimitExceeded = true;
+				return userData;
+			}
+			userData.rateLimitExceeded = false;
+
+			const lvl = parseInt(levelId, 10);
+			const maxScore = lvl * 1000 + 3000;
+			if (score > maxScore) {
+				console.log("Score too high", score, maxScore);
+				userData.scoreTooHigh = true;
+				return userData;
+			}
 
 			userData = updateLevelProgress(
 				userData,
@@ -547,24 +569,34 @@ app.post("/api/update-level", async (req, res) => {
 				stars,
 				currentSeason
 			);
+			userData.lastSubmitAt = now;
+			userData.scoreTooHigh = false;
+			console.log(userData.rateLimitExceeded);
+
 			return userData;
 		})
-		.then(async (result) => {
-			if (!result.committed) {
-				return res.json({ success: false, message: "Update failed" });
+		.then((result) => {
+			const userData = result.snapshot.val();
+
+			if (userData.rateLimitExceeded) {
+				console.log(userData.rateLimitExceeded, " rate limit");
+				return res.status(429).json({
+					success: false,
+					message: "Too many submissions. Try later.",
+				});
 			}
 
-			const userData = result.snapshot.val();
-			if (levelId === "4" && userData.referKey) {
-				const refererAddress = userData.referKey;
-				const refererRef = db.ref(`users/${refererAddress}`);
+			if (userData.scoreTooHigh) {
+				return res.status(400).json({
+					success: false,
+					message: "Score exceeds maximum for this level.",
+				});
+			}
 
-				const refererSnap = await refererRef.get();
-				const refererData = refererSnap.val() || {};
-				refererData.roasterToken = (refererData.roasterToken || 0) + 20;
-				await refererRef.update({ roasterToken: refererData.roasterToken });
-
-				await userRef.update({ referKey: null });
+			if (!result.committed) {
+				return res
+					.status(400)
+					.json({ success: false, message: "Update failed" });
 			}
 
 			res.json({
@@ -574,6 +606,9 @@ app.post("/api/update-level", async (req, res) => {
 			});
 		})
 		.catch((error) => {
+			if (error.message === "Too many submissions. Try later.") {
+				return res.status(429).json({ success: false, message: error.message });
+			}
 			res.status(500).json({ success: false, error: error.message });
 		});
 });
