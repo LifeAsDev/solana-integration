@@ -555,7 +555,7 @@ app.post("/api/update-level", async (req, res) => {
 			userData.rateLimitExceeded = false;
 
 			const lvl = parseInt(levelId, 10);
-			const maxScore = lvl * 1000 + 3000;
+			const maxScore = (lvl + 1) * 9000 + 3000;
 			if (score > maxScore) {
 				console.log("Score too high", score, maxScore);
 				userData.scoreTooHigh = true;
