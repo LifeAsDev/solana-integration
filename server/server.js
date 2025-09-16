@@ -265,19 +265,20 @@ app.post("/auth/nonce", async (req, res) => {
 			const decoded = jwt.verify(token, secretKey);
 			if (decoded.publicKey !== address) {
 			} else {
-				const userToken = jwt.sign({ publicKey: address }, secretKey, {
-					expiresIn: "600h",
-				});
-
 				const snapshot = await usersRef.get();
-				const userData = snapshot.val();
+				if (snapshot.exists()) {
+					const userToken = jwt.sign({ publicKey: address }, secretKey, {
+						expiresIn: "600h",
+					});
+					const userData = snapshot.val();
 
-				return res.json({
-					success: true,
-					token: userToken,
-					account: { address },
-					userData,
-				});
+					return res.json({
+						success: true,
+						token: userToken,
+						account: { address },
+						userData,
+					});
+				}
 			}
 		} catch (err) {
 			console.error("Token invalid:", err);
