@@ -14,6 +14,8 @@ const solanaWeb3JsAdapter = new SolanaAdapter();
 
 const projectId = "61f529aa30c77838f2502740d05202ad";
 
+/* const projectId = "a6f9cfe1ea93b9d112ecb4e24589d8b0";
+ */
 const metadata = {
 	name: "Roast Rush",
 	description: "Roast Rush game",

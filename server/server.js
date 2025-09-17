@@ -614,11 +614,78 @@ app.post("/api/update-level", async (req, res) => {
 		});
 });
 
+const availableTasks = {
+	followX: 2000,
+	telegramJoin: 2000,
+};
+
+app.post("/api/claim-task", async (req, res) => {
+	try {
+		const { taskId } = req.body;
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token) return res.status(401).json({ error: "No token provided" });
+
+		const payload = jwt.verify(token, process.env.JWT_SECRET);
+		const addressFromToken = payload.publicKey;
+
+		if (!availableTasks.hasOwnProperty(taskId)) {
+			return res.status(400).json({ success: false, error: "Invalid taskId" });
+		}
+
+		const userRef = db.ref(`users/${addressFromToken}`);
+		const seasonKeyRef = db.ref("season");
+		const currentSeason = (await seasonKeyRef.get()).val();
+
+		userRef
+			.transaction((userData) => {
+				if (!userData) return null;
+
+				if (userData.tasks && userData.tasks[taskId]) {
+					return userData;
+				}
+
+				if (!userData.tasks) {
+					userData.tasks = {};
+				}
+
+				userData.tasks[taskId] = true;
+
+				userData = addPoints(userData, availableTasks[taskId], currentSeason);
+
+				return userData;
+			})
+			.then((result) => {
+				if (!result.committed) {
+					return res.status(400).json({
+						success: false,
+						message: "Task already claimed or user not found",
+					});
+				}
+
+				const userData = result.snapshot.val();
+
+				res.json({
+					success: true,
+					message: `Task ${taskId} claimed successfully`,
+					pointsAwarded: availableTasks[taskId],
+					masterScore: userData.masterScore,
+					tasks: userData.tasks,
+				});
+			})
+			.catch((err) => {
+				console.error("Error claiming task:", err);
+				res.status(500).json({ success: false, error: err.message });
+			});
+	} catch (error) {
+		console.error("Error /api/claim-task:", error);
+		res.status(500).json({ success: false, error: error.message });
+	}
+});
+
 app.get("/", (req, res) => {
 	res.send("Hello copper");
 });
-
 const PORT = 3000;
-app.listen(PORT, () => {
-	console.log(`Backend  http://localhost:${PORT}`);
+app.listen(PORT, "127.0.0.1", () => {
+	console.log(`Listening http://127.0.0.1:${PORT}`);
 });
