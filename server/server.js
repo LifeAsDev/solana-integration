@@ -543,6 +543,19 @@ app.post("/api/update-level", async (req, res) => {
 		.transaction((userData) => {
 			if (!userData) return null;
 
+			if (levelId !== 1) {
+				const previousLevelId = `level${levelId - 1}`;
+				if (
+					!userData.levels ||
+					!userData.levels[previousLevelId] ||
+					(userData.levels[previousLevelId].highScore || 0) === 0
+				) {
+					console.log(`Level ${levelId} is not unlocked for this user.`);
+					userData.levelNotUnlocked = true;
+					return userData;
+				}
+			}
+
 			const now = Date.now();
 
 			if (
@@ -578,6 +591,13 @@ app.post("/api/update-level", async (req, res) => {
 		})
 		.then((result) => {
 			const userData = result.snapshot.val();
+
+			if (userData.levelNotUnlocked) {
+				return res.status(403).json({
+					success: false,
+					message: `Level ${levelId} is not unlocked.`,
+				});
+			}
 
 			if (userData.rateLimitExceeded) {
 				console.log(userData.rateLimitExceeded, " rate limit");
