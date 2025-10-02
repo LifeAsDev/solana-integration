@@ -499,9 +499,10 @@ function updateLevelProgress(userData, levelId, score, stars, currentSeason) {
 
 app.get("/api/leaderboard/global", async (req, res) => {
 	try {
+		console.log(req.headers);
+
 		const token = req.headers.authorization?.split(" ")[1];
 		if (!token) return res.status(401).json({ error: "No token provided" });
-
 		const payload = jwt.verify(token, process.env.JWT_SECRET);
 		const addressFromToken = payload.publicKey;
 
@@ -543,6 +544,7 @@ app.post("/api/update-level", async (req, res) => {
 		.transaction((userData) => {
 			if (!userData) return null;
 			const levelNum = Number(levelId);
+			userData.levelNotUnlocked = false;
 
 			if (levelNum !== 0) {
 				const previousLevelId = `level${levelNum - 1}`;
