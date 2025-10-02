@@ -542,20 +542,20 @@ app.post("/api/update-level", async (req, res) => {
 	userRef
 		.transaction((userData) => {
 			if (!userData) return null;
+			const levelNum = Number(levelId);
 
-			if (levelId !== 1) {
-				const previousLevelId = `level${levelId - 1}`;
+			if (levelNum !== 0) {
+				const previousLevelId = `level${levelNum - 1}`;
 				if (
 					!userData.levels ||
 					!userData.levels[previousLevelId] ||
 					(userData.levels[previousLevelId].highScore || 0) === 0
 				) {
-					console.log(`Level ${levelId} is not unlocked for this user.`);
+					console.log(`Level ${levelNum} is not unlocked for this user.`);
 					userData.levelNotUnlocked = true;
 					return userData;
 				}
 			}
-
 			const now = Date.now();
 
 			if (
