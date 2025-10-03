@@ -536,6 +536,7 @@ app.post("/api/update-level", async (req, res) => {
 
 	const payload = jwt.verify(token, process.env.JWT_SECRET);
 	const addressFromToken = payload.publicKey;
+	console.log("/api/update-level", addressFromToken, levelId, score, stars);
 
 	const currentSeason = (await db.ref("season").get()).val();
 	const userRef = db.ref(`users/${addressFromToken}`);
